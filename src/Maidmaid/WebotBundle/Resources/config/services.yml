@@ -1,0 +1,7 @@
+parameters:
+#    maidmaid_webot.example.class: Maidmaid\WebotBundle\Example
+
+services:
+#    maidmaid_webot.example:
+#        class: %maidmaid_webot.example.class%
+#        arguments: [@service_id, "plain_value", %parameter%]

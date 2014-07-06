@@ -1,0 +1,4 @@
+maidmaid_webot:
+    resource: "@MaidmaidWebotBundle/Resources/config/routing.yml"
+    prefix:   /
+
