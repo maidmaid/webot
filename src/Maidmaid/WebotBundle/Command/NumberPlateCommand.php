@@ -2,9 +2,12 @@
 
 namespace Maidmaid\WebotBundle\Command;
 
+use GuzzleHttp\Message\Response;
 use NumberPlate\Searcher;
 use Symfony\Bundle\FrameworkBundle\Command\ContainerAwareCommand;
+use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\EventDispatcher\Event;
 use Symfony\Component\EventDispatcher\GenericEvent;
@@ -27,7 +30,21 @@ class NumberPlateCommand extends ContainerAwareCommand
     {
         $this
             ->setName('webot:numberplate')
-            ->setDescription('Hello World example command');
+            ->setDescription('')
+			->addOption(
+				'min-sleep',
+				null,
+				InputOption::VALUE_REQUIRED,
+				'min sleep (seconds)',
+				30
+			)
+			->addOption(
+				'max-sleep',
+				null,
+				InputOption::VALUE_REQUIRED,
+				'max sleep (seconds)',
+				60
+			);
 	}
 
     /**
@@ -38,13 +55,13 @@ class NumberPlateCommand extends ContainerAwareCommand
 		$this->searcher = new Searcher();
 		
 		// Event cookie.initialize
-		$this->searcher->getDispatcher()->addListener('cookie.initialize', function(GenericEvent $e) use(&$output) {
+		$this->searcher->getDispatcher()->addListener('cookie.initialize', function(GenericEvent $e) use(&$output, &$input) {
 			$cookies = $e->getSubject();
 			$cookie = $cookies[0]['Name'] . '=' . $cookies[0]['Value'];
 			$output->writeln(sprintf('cookie.initialize: <comment>%s</comment>', $cookie));
 			
 			// Sleep
-			$seconds = rand(15, 45);
+			$seconds = rand($input->getOption('min-sleep'), $input->getOption('max-sleep'));
 			$output->writeln(sprintf('sleep <comment>%s</comment> seconds', $seconds));
 			sleep($seconds);
 		});
@@ -61,29 +78,39 @@ class NumberPlateCommand extends ContainerAwareCommand
 
 		// Event search.send
 		$this->searcher->getDispatcher()->addListener('search.send', function(GenericEvent $e) use(&$output) {
-			/* @var $response \GuzzleHttp\Message\Response */
+			/* @var $response Response */
 			$response = $e->getSubject();
 			$output->writeln(sprintf('search.send: <comment>%s</comment>', $response->getStatusCode() . ' ' . $response->getReasonPhrase()));
 		});
 		
 		// Event error.return
-		$this->searcher->getDispatcher()->addListener('error.return', function(GenericEvent $e) use(&$output) {
+		$this->searcher->getDispatcher()->addListener('error.return', function(GenericEvent $e) use(&$output, &$input) {
 			$output->writeln(sprintf('error.return: <error>%s</error>', $e->getSubject()));
 			
 			// Sleep
-			$seconds = rand(30, 60);
+			$seconds = rand($input->getOption('min-sleep'), $input->getOption('max-sleep'));
 			$output->writeln(sprintf('sleep <comment>%s</comment> seconds', $seconds));
 			sleep($seconds);
 		});
 		
 		// Search
-		$numberplate = rand(10000, 99999);
+		$numberplate = rand(1, 99999);
 		$output->writeln(sprintf('Search for: <question>%s</question>', $numberplate));
-		$name = $this->searcher->search($numberplate);
+		$data = $this->searcher->search($numberplate);
 		
 		// Result
 		$output->writeln(sprintf('Search for: <question>%s</question>', $numberplate));
-		$output->writeln(sprintf('Result: <question>%s</question>', $name));
+		if(empty($data))
+		{
+			$output->writeln(sprintf('<info>%s</info>', $this->searcher->getLastError()));
+		}
+		else
+		{
+			$table = new Table($output);
+			$table->setHeaders(array_keys($data));
+			$table->addRow($data);
+			$table->render();
+		}
 		
 		$this->execute($input, $output);
     }
