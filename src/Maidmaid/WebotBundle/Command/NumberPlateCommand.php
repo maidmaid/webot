@@ -98,7 +98,7 @@ class NumberPlateCommand extends ContainerAwareCommand
 		$output->writeln(sprintf('Search for: <question>%s</question>', $numberplate));
 		$data = $this->searcher->search($numberplate);
 		
-		// Result
+		// Show result
 		$output->writeln(sprintf('Search for: <question>%s</question>', $numberplate));
 		if(empty($data))
 		{
@@ -111,6 +111,29 @@ class NumberPlateCommand extends ContainerAwareCommand
 			$table->addRow($data);
 			$table->render();
 		}
+		
+		// Save result
+		$np = new \Maidmaid\WebotBundle\Entity\Numberplate();
+		$np->setNumberplate($numberplate);
+		if(empty($data))
+		{
+			$np->setInfo($this->searcher->getLastError());
+		}
+		else
+		{
+			$np->setCategory($data['category']);
+			$np->setSubcategory($data['subcategory']);
+			$np->setName($data['name']);
+			$np->setAddress($data['address']);
+			$np->setComplement($data['complement']);
+			$np->setLocality($data['locality']);	
+		}
+		
+		/* @var $doctrine \Doctrine\Bundle\DoctrineBundle\Registry */
+		$doctrine = $this->getContainer()->get('doctrine');
+		$em = $doctrine->getManager();
+		$em->persist($np);
+		$em->flush();
 		
 		$this->execute($input, $output);
     }
