@@ -55,7 +55,7 @@ class NumberPlateCommand extends ContainerAwareCommand
 		$this->searcher = new Searcher();
 		
 		// Event cookie.initialize		
-		$initializeCookie = function(GenericEvent $e) use(&$output, &$input)
+		$onCookieInitialize = function(GenericEvent $e) use(&$output, &$input)
 		{
 			$cookies = $e->getSubject();
 			$cookie = $cookies[0]['Name'] . '=' . $cookies[0]['Value'];
@@ -66,33 +66,33 @@ class NumberPlateCommand extends ContainerAwareCommand
 			$output->writeln(sprintf('sleep <comment>%s</comment> seconds', $seconds));
 			sleep($seconds);
 		};
-		$this->searcher->getDispatcher()->addListener('cookie.initialize', $initializeCookie);
+		$this->searcher->getDispatcher()->addListener('cookie.initialize', $onCookieInitialize);
 		
 		// Event captcha.download
-		$downloadCaptcha = function(Event $e) use(&$output)
+		$onCaptchaDownload = function(Event $e) use(&$output)
 		{
 			$output->writeln('captcha.download');
 		};
-		$this->searcher->getDispatcher()->addListener('captcha.download', $downloadCaptcha);
+		$this->searcher->getDispatcher()->addListener('captcha.download', $onCaptchaDownload);
 		
 		// Event captcha.decode
-		$decodeCaptcha = function(GenericEvent $e) use(&$output)
+		$onCaptchaDecode = function(GenericEvent $e) use(&$output)
 		{
 			$output->writeln(sprintf('captcha.decode: <comment>%s</comment>', $e->getSubject()));
 		};
-		$this->searcher->getDispatcher()->addListener('captcha.decode', $decodeCaptcha);
+		$this->searcher->getDispatcher()->addListener('captcha.decode', $onCaptchaDecode);
 
 		// Event search.send
-		$sendSearch = function(GenericEvent $e) use(&$output)
+		$onSearchSend = function(GenericEvent $e) use(&$output)
 		{
 			/* @var $response Response */
 			$response = $e->getSubject();
 			$output->writeln(sprintf('search.send: <comment>%s</comment>', $response->getStatusCode() . ' ' . $response->getReasonPhrase()));
 		};
-		$this->searcher->getDispatcher()->addListener('search.send', $sendSearch);
+		$this->searcher->getDispatcher()->addListener('search.send', $onSearchSend);
 		
 		// Event error.return
-		$returnError = function(GenericEvent $e) use(&$output, &$input)
+		$onErrorReturn = function(GenericEvent $e) use(&$output, &$input)
 		{
 			$output->writeln(sprintf('error.return: <error>%s</error>', $e->getSubject()));
 			
@@ -101,7 +101,7 @@ class NumberPlateCommand extends ContainerAwareCommand
 			$output->writeln(sprintf('sleep <comment>%s</comment> seconds', $seconds));
 			sleep($seconds);
 		};
-		$this->searcher->getDispatcher()->addListener('error.return', $returnError);
+		$this->searcher->getDispatcher()->addListener('error.return', $onErrorReturn);
 		
 		// Search
 		$numberplate = rand(1, 99999);
