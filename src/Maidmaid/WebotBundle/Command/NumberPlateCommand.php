@@ -54,8 +54,9 @@ class NumberPlateCommand extends ContainerAwareCommand
     {
 		$this->searcher = new Searcher();
 		
-		// Event cookie.initialize
-		$this->searcher->getDispatcher()->addListener('cookie.initialize', function(GenericEvent $e) use(&$output, &$input) {
+		// Event cookie.initialize		
+		$initializeCookie = function(GenericEvent $e) use(&$output, &$input)
+		{
 			$cookies = $e->getSubject();
 			$cookie = $cookies[0]['Name'] . '=' . $cookies[0]['Value'];
 			$output->writeln(sprintf('cookie.initialize: <comment>%s</comment>', $cookie));
@@ -64,53 +65,48 @@ class NumberPlateCommand extends ContainerAwareCommand
 			$seconds = rand($input->getOption('min-sleep'), $input->getOption('max-sleep'));
 			$output->writeln(sprintf('sleep <comment>%s</comment> seconds', $seconds));
 			sleep($seconds);
-		});
+		};
+		$this->searcher->getDispatcher()->addListener('cookie.initialize', $initializeCookie);
 		
 		// Event captcha.download
-		$this->searcher->getDispatcher()->addListener('captcha.download', function(Event $e) use(&$output) {
+		$downloadCaptcha = function(Event $e) use(&$output)
+		{
 			$output->writeln('captcha.download');
-		});
+		};
+		$this->searcher->getDispatcher()->addListener('captcha.download', $downloadCaptcha);
 		
 		// Event captcha.decode
-		$this->searcher->getDispatcher()->addListener('captcha.decode', function(GenericEvent $e) use(&$output) {
+		$decodeCaptcha = function(GenericEvent $e) use(&$output)
+		{
 			$output->writeln(sprintf('captcha.decode: <comment>%s</comment>', $e->getSubject()));
-		});
+		};
+		$this->searcher->getDispatcher()->addListener('captcha.decode', $decodeCaptcha);
 
 		// Event search.send
-		$this->searcher->getDispatcher()->addListener('search.send', function(GenericEvent $e) use(&$output) {
+		$sendSearch = function(GenericEvent $e) use(&$output)
+		{
 			/* @var $response Response */
 			$response = $e->getSubject();
 			$output->writeln(sprintf('search.send: <comment>%s</comment>', $response->getStatusCode() . ' ' . $response->getReasonPhrase()));
-		});
+		};
+		$this->searcher->getDispatcher()->addListener('search.send', $sendSearch);
 		
 		// Event error.return
-		$this->searcher->getDispatcher()->addListener('error.return', function(GenericEvent $e) use(&$output, &$input) {
+		$returnError = function(GenericEvent $e) use(&$output, &$input)
+		{
 			$output->writeln(sprintf('error.return: <error>%s</error>', $e->getSubject()));
 			
 			// Sleep
 			$seconds = rand($input->getOption('min-sleep'), $input->getOption('max-sleep'));
 			$output->writeln(sprintf('sleep <comment>%s</comment> seconds', $seconds));
 			sleep($seconds);
-		});
+		};
+		$this->searcher->getDispatcher()->addListener('error.return', $returnError);
 		
 		// Search
 		$numberplate = rand(1, 99999);
 		$output->writeln(sprintf('Search for: <question>%s</question>', $numberplate));
 		$data = $this->searcher->search($numberplate);
-		
-		// Show result
-		$output->writeln(sprintf('Search for: <question>%s</question>', $numberplate));
-		if(empty($data))
-		{
-			$output->writeln(sprintf('<info>%s</info>', $this->searcher->getLastError()));
-		}
-		else
-		{
-			$table = new Table($output);
-			$table->setHeaders(array_keys($data));
-			$table->addRow($data);
-			$table->render();
-		}
 		
 		// Save result
 		$np = new \Maidmaid\WebotBundle\Entity\Numberplate();
@@ -134,6 +130,12 @@ class NumberPlateCommand extends ContainerAwareCommand
 		$em = $doctrine->getManager();
 		$em->persist($np);
 		$em->flush();
+		
+		// Show result
+		$table = new Table($output);
+		$table->setHeaders(array_keys($np->toArray()));
+		$table->addRow((array) $np);
+		$table->render();
 		
 		$this->execute($input, $output);
     }
