@@ -2,15 +2,16 @@
 
 namespace Maidmaid\WebotBundle\Command;
 
-use GuzzleHttp\Message\Response;
+use Doctrine\Bundle\DoctrineBundle\Registry;
+use Maidmaid\WebotBundle\Entity\Numberplate;
+use Maidmaid\WebotBundle\Event\SearcherSubscriber;
 use NumberPlate\Searcher;
 use Symfony\Bundle\FrameworkBundle\Command\ContainerAwareCommand;
+use Symfony\Component\Console\Helper\FormatterHelper;
 use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\EventDispatcher\Event;
-use Symfony\Component\EventDispatcher\GenericEvent;
 
 class NumberPlateCommand extends ContainerAwareCommand
 {
@@ -52,16 +53,17 @@ class NumberPlateCommand extends ContainerAwareCommand
     protected function execute(InputInterface $input, OutputInterface $output)
     {
 		$searcher = new Searcher();
-		$subscriber = new \Maidmaid\WebotBundle\Event\SearcherSubscriber($input, $output);
+		$subscriber = new SearcherSubscriber($input, $output);
 		$searcher->getDispatcher()->addSubscriber($subscriber);
+		$formatter = new FormatterHelper();
 		
 		// Search
 		$numberplate = rand(1, 99999);
-		$output->writeln(sprintf('Search for: <question>%s</question>', $numberplate));
+		$output->writeln($formatter->formatBlock('Search ' . $numberplate, 'question', true));
 		$data = $searcher->search($numberplate);
 		
 		// Save result
-		$np = new \Maidmaid\WebotBundle\Entity\Numberplate();
+		$np = new Numberplate();
 		$np->setNumberplate($numberplate);
 		if(empty($data))
 		{
@@ -77,7 +79,7 @@ class NumberPlateCommand extends ContainerAwareCommand
 			$np->setLocality($data['locality']);	
 		}
 		
-		/* @var $doctrine \Doctrine\Bundle\DoctrineBundle\Registry */
+		/* @var $doctrine Registry */
 		$doctrine = $this->getContainer()->get('doctrine');
 		$em = $doctrine->getManager();
 		$em->persist($np);
