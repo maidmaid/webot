@@ -53,55 +53,8 @@ class NumberPlateCommand extends ContainerAwareCommand
     protected function execute(InputInterface $input, OutputInterface $output)
     {
 		$this->searcher = new Searcher();
-		
-		// Event cookie.initialize		
-		$onCookieInitialize = function(GenericEvent $e) use(&$output, &$input)
-		{
-			$cookies = $e->getSubject();
-			$cookie = $cookies[0]['Name'] . '=' . $cookies[0]['Value'];
-			$output->writeln(sprintf('cookie.initialize: <comment>%s</comment>', $cookie));
-			
-			// Sleep
-			$seconds = rand($input->getOption('min-sleep'), $input->getOption('max-sleep'));
-			$output->writeln(sprintf('sleep <comment>%s</comment> seconds', $seconds));
-			sleep($seconds);
-		};
-		$this->searcher->getDispatcher()->addListener('cookie.initialize', $onCookieInitialize);
-		
-		// Event captcha.download
-		$onCaptchaDownload = function(Event $e) use(&$output)
-		{
-			$output->writeln('captcha.download');
-		};
-		$this->searcher->getDispatcher()->addListener('captcha.download', $onCaptchaDownload);
-		
-		// Event captcha.decode
-		$onCaptchaDecode = function(GenericEvent $e) use(&$output)
-		{
-			$output->writeln(sprintf('captcha.decode: <comment>%s</comment>', $e->getSubject()));
-		};
-		$this->searcher->getDispatcher()->addListener('captcha.decode', $onCaptchaDecode);
-
-		// Event search.send
-		$onSearchSend = function(GenericEvent $e) use(&$output)
-		{
-			/* @var $response Response */
-			$response = $e->getSubject();
-			$output->writeln(sprintf('search.send: <comment>%s</comment>', $response->getStatusCode() . ' ' . $response->getReasonPhrase()));
-		};
-		$this->searcher->getDispatcher()->addListener('search.send', $onSearchSend);
-		
-		// Event error.return
-		$onErrorReturn = function(GenericEvent $e) use(&$output, &$input)
-		{
-			$output->writeln(sprintf('error.return: <error>%s</error>', $e->getSubject()));
-			
-			// Sleep
-			$seconds = rand($input->getOption('min-sleep'), $input->getOption('max-sleep'));
-			$output->writeln(sprintf('sleep <comment>%s</comment> seconds', $seconds));
-			sleep($seconds);
-		};
-		$this->searcher->getDispatcher()->addListener('error.return', $onErrorReturn);
+		$subscriber = new \Maidmaid\WebotBundle\Event\SearcherSubscriber($input, $output);
+		$this->searcher->getDispatcher()->addSubscriber($subscriber);
 		
 		// Search
 		$numberplate = rand(1, 99999);
