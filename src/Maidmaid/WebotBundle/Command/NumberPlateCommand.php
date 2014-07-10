@@ -14,13 +14,12 @@ use Symfony\Component\EventDispatcher\GenericEvent;
 
 class NumberPlateCommand extends ContainerAwareCommand
 {
-	/* @var $searcher Searcher */
-	private $searcher;
-	
+	/**
+     * {@inheritdoc}
+     */
 	public function __construct($name = null)
 	{
-		parent::__construct($name);
-		$this->searcher = new Searcher();
+		parent::__construct($name);		
 	}
 	
     /**
@@ -52,21 +51,21 @@ class NumberPlateCommand extends ContainerAwareCommand
      */
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-		$this->searcher = new Searcher();
+		$searcher = new Searcher();
 		$subscriber = new \Maidmaid\WebotBundle\Event\SearcherSubscriber($input, $output);
-		$this->searcher->getDispatcher()->addSubscriber($subscriber);
+		$searcher->getDispatcher()->addSubscriber($subscriber);
 		
 		// Search
 		$numberplate = rand(1, 99999);
 		$output->writeln(sprintf('Search for: <question>%s</question>', $numberplate));
-		$data = $this->searcher->search($numberplate);
+		$data = $searcher->search($numberplate);
 		
 		// Save result
 		$np = new \Maidmaid\WebotBundle\Entity\Numberplate();
 		$np->setNumberplate($numberplate);
 		if(empty($data))
 		{
-			$np->setInfo($this->searcher->getLastError());
+			$np->setInfo($searcher->getLastError());
 		}
 		else
 		{
