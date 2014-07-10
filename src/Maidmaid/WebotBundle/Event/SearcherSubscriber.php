@@ -28,11 +28,7 @@ class SearcherSubscriber extends AbstractSearcherSubscriber
 		$cookies = $e->getSubject();
 		$cookie = $cookies[0]['Name'] . '=' . $cookies[0]['Value'];
 		$this->output->writeln(sprintf('cookie.initialize: <comment>%s</comment>', $cookie));
-
-		// Sleep
-		$seconds = rand($this->input->getOption('min-sleep'), $this->input->getOption('max-sleep'));
-		$this->output->writeln(sprintf('sleep <comment>%s</comment> seconds', $seconds));
-		sleep($seconds);
+		$this->sleep();
 	}
 	
 	public function onCaptchaDownload(Event $e)
@@ -55,8 +51,11 @@ class SearcherSubscriber extends AbstractSearcherSubscriber
 	public function onErrorReturn(GenericEvent $e)
 	{
 		$this->output->writeln(sprintf('error.return: <error>%s</error>', $e->getSubject()));
-			
-		// Sleep
+		$this->sleep();
+	}
+	
+	protected function sleep()
+	{
 		$seconds = rand($this->input->getOption('min-sleep'), $this->input->getOption('max-sleep'));
 		$this->output->writeln(sprintf('sleep <comment>%s</comment> seconds', $seconds));
 		sleep($seconds);
