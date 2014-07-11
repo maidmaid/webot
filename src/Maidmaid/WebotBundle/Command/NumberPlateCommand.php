@@ -52,45 +52,55 @@ class NumberPlateCommand extends ContainerAwareCommand
      */
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-		$searcher = new Searcher();
 		$subscriber = new SearcherSubscriber($input, $output);
-		$searcher->getDispatcher()->addSubscriber($subscriber);
+		
 		$formatter = new FormatterHelper();
-		
-		// Search
-		$numberplate = rand(1, 99999);
-		$output->writeln($formatter->formatBlock('Search ' . $numberplate, 'question', true));
-		$data = $searcher->search($numberplate);
-		
-		// Save result
-		$np = new Numberplate();
-		$np->setNumberplate($numberplate);
-		if(empty($data))
-		{
-			$np->setInfo($searcher->getLastError());
-		}
-		else
-		{
-			$np->setCategory($data['category']);
-			$np->setSubcategory($data['subcategory']);
-			$np->setName($data['name']);
-			$np->setAddress($data['address']);
-			$np->setComplement($data['complement']);
-			$np->setLocality($data['locality']);	
-		}
+		$table = new Table($output);
+		$temp = new Numberplate();
+		$table->setHeaders(array_keys($temp->toArray()));
 		
 		/* @var $doctrine Registry */
 		$doctrine = $this->getContainer()->get('doctrine');
 		$em = $doctrine->getManager();
-		$em->persist($np);
-		$em->flush();
+		$i = 0;
 		
-		// Show result
-		$table = new Table($output);
-		$table->setHeaders(array_keys($np->toArray()));
-		$table->addRow((array) $np);
-		$table->render();
-		
-		$this->execute($input, $output);
-    }
+		while(true)
+		{
+			$i++;
+			if($i % 10 == rand(0, 10) || $i == 1)
+			{
+				$searcher = new Searcher();
+				$searcher->getDispatcher()->addSubscriber($subscriber);
+			}
+
+			// Search
+			$numberplate = rand(1, 99999);
+			$output->writeln($formatter->formatBlock('Search #' . $i . ': ' . $numberplate, 'question', true));
+			$data = $searcher->search($numberplate);
+
+			// Save result
+			$np = new Numberplate();
+			$np->setNumberplate($numberplate);
+			if(empty($data))
+			{
+				$np->setInfo($searcher->getLastError());
+			}
+			else
+			{
+				$np->setCategory($data['category']);
+				$np->setSubcategory($data['subcategory']);
+				$np->setName($data['name']);
+				$np->setAddress($data['address']);
+				$np->setComplement($data['complement']);
+				$np->setLocality($data['locality']);	
+			}
+
+			$em->persist($np);
+			$em->flush();
+
+			// Show result
+			$table->setRows(array($np->toArray()));
+			$table->render();
+		}
+	}
 }
