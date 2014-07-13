@@ -62,6 +62,8 @@ class NumberPlateCommand extends ContainerAwareCommand
 		/* @var $doctrine Registry */
 		$doctrine = $this->getContainer()->get('doctrine');
 		$em = $doctrine->getManager();
+		/* @var $repository \Maidmaid\WebotBundle\Entity\NumberplateRepository */
+		$repository = $doctrine->getRepository('MaidmaidWebotBundle:Numberplate');
 		$i = 0;
 		
 		while(true)
@@ -74,7 +76,8 @@ class NumberPlateCommand extends ContainerAwareCommand
 			}
 
 			// Search
-			$numberplate = rand(1, 99999);
+			$gap = $repository->getRandomGap();
+			$numberplate = rand($gap['start'], $gap['end']);
 			$output->writeln($formatter->formatBlock('Search #' . $i . ': ' . $numberplate, 'question', true));
 			$data = $searcher->search($numberplate);
 

@@ -12,4 +12,26 @@ use Doctrine\ORM\EntityRepository;
  */
 class NumberplateRepository extends EntityRepository
 {
+	public function getRandomGap()
+	{
+		$sql = implode(' ', array(
+			'SELECT a.numberplate + 1 AS start, MIN(b.numberplate) - 1 AS end',
+			'FROM numberplate AS a, numberplate AS b',
+			'WHERE a.numberplate < b.numberplate',
+			'GROUP BY a.numberplate',
+			'HAVING start < MIN(b.numberplate)',
+			'ORDER BY rand()',
+			'LIMIT 1'
+		));
+		
+		$rsm = new \Doctrine\ORM\Query\ResultSetMapping();
+		$rsm->addScalarResult('start', 'start');
+		$rsm->addScalarResult('end', 'end');
+		
+		$query = $this->getEntityManager()->createNativeQuery($sql, $rsm);
+		$result = $query->getSingleResult();
+		
+		return $result;
+	}
+	
 }
