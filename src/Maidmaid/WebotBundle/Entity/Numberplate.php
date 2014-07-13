@@ -2,6 +2,7 @@
 
 namespace Maidmaid\WebotBundle\Entity;
 
+use Gedmo\Mapping\Annotation as Gedmo;
 use Doctrine\ORM\Mapping as ORM;
 
 /**
@@ -21,6 +22,22 @@ class Numberplate
      */
     private $id;
 
+	/**
+     * @var datetime $created
+     *
+     * @Gedmo\Timestampable(on="create")
+     * @ORM\Column(type="datetime")
+     */
+    private $created;
+	
+	/**
+     * @var datetime $updated
+     *
+     * @Gedmo\Timestampable(on="update")
+     * @ORM\Column(type="datetime")
+     */
+    private $updated;
+	
     /**
      * @var integer
      *
@@ -274,6 +291,64 @@ class Numberplate
 	
 	public function toArray()
 	{
-		return get_object_vars($this);
+		$array = get_object_vars($this);
+		
+		// created
+		if ($array['created'] instanceof \DateTime) {
+			$array['created'] = $array['created']->format('Y-m-d H:i:s');
+		}
+		
+		// updated
+		if ($array['updated'] instanceof \DateTime) {
+			$array['updated'] = $array['updated']->format('Y-m-d H:i:s');
+		}
+		
+		return $array;
 	}
+
+    /**
+     * Set created
+     *
+     * @param \DateTime $created
+     * @return Numberplate
+     */
+    public function setCreated($created)
+    {
+        $this->created = $created;
+
+        return $this;
+    }
+
+    /**
+     * Get created
+     *
+     * @return \DateTime 
+     */
+    public function getCreated()
+    {
+        return $this->created;
+    }
+
+    /**
+     * Set updated
+     *
+     * @param \DateTime $updated
+     * @return Numberplate
+     */
+    public function setUpdated($updated)
+    {
+        $this->updated = $updated;
+
+        return $this;
+    }
+
+    /**
+     * Get updated
+     *
+     * @return \DateTime 
+     */
+    public function getUpdated()
+    {
+        return $this->updated;
+    }
 }
