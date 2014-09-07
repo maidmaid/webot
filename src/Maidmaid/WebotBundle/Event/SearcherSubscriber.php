@@ -54,7 +54,7 @@ class SearcherSubscriber extends AbstractSearcherSubscriber
 		$this->sleep();
 	}
 	
-	protected function sleep()
+	public function sleep()
 	{
 		$seconds = rand($this->input->getOption('min-sleep'), $this->input->getOption('max-sleep'));
 		$this->output->writeln(sprintf('sleep <comment>%s</comment> seconds', $seconds));

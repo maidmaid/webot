@@ -65,10 +65,21 @@ class NumberPlateCommand extends ContainerAwareCommand
 		/* @var $repository \Maidmaid\WebotBundle\Entity\NumberplateRepository */
 		$repository = $doctrine->getRepository('MaidmaidWebotBundle:Numberplate');
 		$i = 0;
+		$newSearch = true;
 		
 		while(true)
 		{
-			$i++;
+			// New search
+			if($newSearch)
+			{
+				$newSearch = true;
+				$i++;
+				$gap = $repository->getRandomGap();
+				$numberplate = rand($gap['start'], $gap['end']);
+				$output->writeln($formatter->formatBlock('Search #' . $i . ': ' . $numberplate, 'question', true));
+			}
+			
+			// New session
 			if($i % 10 == rand(0, 10) || $i == 1)
 			{
 				$searcher = new Searcher();
@@ -76,10 +87,19 @@ class NumberPlateCommand extends ContainerAwareCommand
 			}
 
 			// Search
-			$gap = $repository->getRandomGap();
-			$numberplate = rand($gap['start'], $gap['end']);
-			$output->writeln($formatter->formatBlock('Search #' . $i . ': ' . $numberplate, 'question', true));
-			$data = $searcher->search($numberplate);
+			try
+			{
+				$data = $searcher->search($numberplate);			
+			}
+			catch(\Exception $e)
+			{
+				$this->getApplication()->renderException($e, $output);
+				$subscriber->sleep();
+				$newSearch = false;
+				continue;
+			}
+			
+			$newSearch = true;
 
 			// Save result
 			$np = new Numberplate();
