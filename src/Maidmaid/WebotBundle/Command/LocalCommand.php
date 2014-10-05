@@ -28,6 +28,11 @@ class LocalCommand extends \Symfony\Bundle\FrameworkBundle\Command\ContainerAwar
 	 * @var InputInterface
 	 */
 	protected $input;
+	
+	/**
+	 * @var \Symfony\Bridge\Monolog\Logger
+	 */
+	protected $logger;
 
 	public function __construct($name = null)
 	{
@@ -48,9 +53,10 @@ class LocalCommand extends \Symfony\Bundle\FrameworkBundle\Command\ContainerAwar
      * {@inheritdoc}
      */
     protected function execute(InputInterface $input, OutputInterface $output)
-    {
+    {	
 		$this->input = $input;
 		$this->output = $output;
+		$this->logger = $this->getContainer()->get('monolog.logger.webot.local');
 		
         // Recherches
         $searchs = array(
@@ -78,7 +84,7 @@ class LocalCommand extends \Symfony\Bundle\FrameworkBundle\Command\ContainerAwar
 
                 // Réponse
                 $response = $this->client->send($request);
-                $html = $response->getBody()->__toString();
+                $html = (string) $response->getBody();
                 $crawler = new Crawler($html);
 
                 // Dernière page
@@ -92,9 +98,8 @@ class LocalCommand extends \Symfony\Bundle\FrameworkBundle\Command\ContainerAwar
 					
 					try
 					{
-						$url = utf8_decode(trim($node->filter('.url')->text()));
-						$urlParsed = parse_url($url);
-						$listing['url'] = isset($urlParsed["scheme"]) ? $url : 'http://' . $url;
+						$url = new \GuzzleHttp\Url('http', trim($node->filter('.url')->text()));
+						$listing['url'] = $url;
 					}
 					catch(\Exception $e)
 					{
@@ -126,10 +131,11 @@ class LocalCommand extends \Symfony\Bundle\FrameworkBundle\Command\ContainerAwar
 					catch(\Exception $e)
 					{
 						$this->output->writeln(sprintf('<error>%s</error>', $e->getMessage()));
+						$this->logger->warning(sprintf('%s - %s', $listing['url'], $e->getMessage()));
 						continue;
 					}
 					
-					$html = $response->getBody()->__toString();
+					$html = (string) $response->getBody();
 					$crawler = new Crawler($html);
 					
 					$stylesheets = $crawler->filterXPath("//link[@rel='stylesheet']/@href");
@@ -158,22 +164,38 @@ class LocalCommand extends \Symfony\Bundle\FrameworkBundle\Command\ContainerAwar
 	{
 		// URL
 		$href = $stylesheet->text();
-		$hrefParsed = parse_url($href);
-		if(!isset($hrefParsed['host']))
+		$temp = \GuzzleHttp\Url::fromString($href);
+		
+		$host = $temp->getHost();
+		if(empty($host))
 		{
-			$href = substr($href, 0, 1) == '/' ? $href : '/' . $href;
-			$href = $listing['url'] . $href;
+			$url = clone $listing['url'];
+			$url->setPath($temp->getPath());
+			$url->setQuery($temp->getQuery());
+		}
+		else
+		{
+			$url = \GuzzleHttp\Url::fromString($href); 
 		}
 		
-		$this->output->write($href);
+		$scheme = $url->getScheme();
+		if(empty($scheme))
+		{
+			$url->setScheme('http');
+		}
+		
+		$url->removeDotSegments();
+		
+		$this->output->write((string) $url);
 		
 		try
 		{
-			$response = $this->client->get($href);
+			$response = $this->client->get($url);
 		}
 		catch(\Exception $e)
 		{
 			$this->output->writeln(sprintf(' <error>%s</error>', $e->getMessage()));
+			$this->logger->warning(sprintf('%s - %s', $url, $e->getMessage()));
 			return 0;
 		}
 
@@ -183,7 +205,7 @@ class LocalCommand extends \Symfony\Bundle\FrameworkBundle\Command\ContainerAwar
 			return 0;
 		}
 
-		$css = $response->getBody()->__toString();
+		$css = (string) $response->getBody();
 		$count = $this->countMediaTag($css);
 		
 		return $count;
@@ -191,6 +213,7 @@ class LocalCommand extends \Symfony\Bundle\FrameworkBundle\Command\ContainerAwar
 	
 	protected function countMediaTag($css)
 	{
+		//$countImport = substr_count($css, '@import');
 		$count = substr_count($css, '@media');
 		$tag = $count == 0 ? 'comment' : 'info';
 		$this->output->writeln(sprintf(' <%s>%s @media founded</%s>', $tag, $count, $tag));

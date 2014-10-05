@@ -11,15 +11,24 @@ web_profiler:
     toolbar: %debug_toolbar%
     intercept_redirects: %debug_redirects%
 
+services:
+    html_formatter:
+        class: Monolog\Formatter\HtmlFormatter
+
 monolog:
     handlers:
         main:
             type:   stream
             path:   "%kernel.logs_dir%/%kernel.environment%.log"
             level:  debug
-        console:
-            type:   console
-            bubble: false
+            bubble: true
+        webot_local:
+            type:   stream
+            path:   "%kernel.logs_dir%/%kernel.environment%-webot-local.html"
+            formatter: html_formatter
+            bubble: true
+            channels: webot.local
+            
         # uncomment to get logging in your browser
         # you may have to allow bigger header sizes in your Web server configuration
         #firephp:
