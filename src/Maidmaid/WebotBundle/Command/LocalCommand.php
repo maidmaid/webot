@@ -2,20 +2,27 @@
 
 namespace Maidmaid\WebotBundle\Command;
 
+use Exception;
+use GuzzleHttp\Client;
+use GuzzleHttp\Url;
+use Symfony\Bridge\Monolog\Logger;
+use Symfony\Bundle\FrameworkBundle\Command\ContainerAwareCommand;
+use Symfony\Component\Console\Helper\FormatterHelper;
 use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\DomCrawler\Crawler;
+use Symfony\Component\Yaml\Yaml;
 
-class LocalCommand extends \Symfony\Bundle\FrameworkBundle\Command\ContainerAwareCommand
+class LocalCommand extends ContainerAwareCommand
 {
 	/**
-	 * @var \GuzzleHttp\Client
+	 * @var Client
 	 */
 	protected $client;
 	
 	/**
-	 * @var \Symfony\Component\Console\Helper\FormatterHelper
+	 * @var FormatterHelper
 	 */
 	protected $formatter;
 	
@@ -30,15 +37,15 @@ class LocalCommand extends \Symfony\Bundle\FrameworkBundle\Command\ContainerAwar
 	protected $input;
 	
 	/**
-	 * @var \Symfony\Bridge\Monolog\Logger
+	 * @var Logger
 	 */
 	protected $logger;
 
 	public function __construct($name = null)
 	{
 		parent::__construct($name);
-		$this->client = new \GuzzleHttp\Client();
-		$this->formatter = new \Symfony\Component\Console\Helper\FormatterHelper();
+		$this->client = new Client();
+		$this->formatter = new FormatterHelper();
 	}
 	
     /**
@@ -57,105 +64,116 @@ class LocalCommand extends \Symfony\Bundle\FrameworkBundle\Command\ContainerAwar
 		$this->input = $input;
 		$this->output = $output;
 		$this->logger = $this->getContainer()->get('monolog.logger.webot.local');
-		
-        // Recherches
-        $searchs = array(
-			array('what' => 'Café, Restaurant', 'where' => 'Valais-Central (Région)'),
-            array('what' => 'Café, Restaurant', 'where' => 'Bas-Valais (Région)')
-        );
+
+        $searchs = Yaml::parse(file_get_contents(__DIR__ . '/../Resources/config/data.yml'));
+        $what = 'Café, Restaurant';
+        $cantons = $searchs['cantons'];
         
-        foreach($searchs as $s => $search)
+        foreach($cantons as $canton => $communes)
         {
-            $lastPage = 1;
-            for($page = 1; $page <= $lastPage; $page++)
+            foreach($communes as $i => $commune)
             {
-                // Message
-				$this->output->writeln($this->formatter->formatBlock(utf8_decode(sprintf('%s, %s, %s/%s', $search['what'], $search['where'], $page, $lastPage)), 'question', true));
-
-                // Requête de base
-                $request = $this->client->createRequest('GET', 'http://tel.local.ch');
-                $request->setPath('fr/q');
-
-                // Query string
-                $query = $request->getQuery();
-                $query->add('what', $search['what']);
-                $query->add('where', $search['where']);
-                $query->add('page', $page);
-
-                // Réponse
-                $response = $this->client->send($request);
-                $html = (string) $response->getBody();
-                $crawler = new Crawler($html);
-
-                // Dernière page
-                $lastPage = (int) $crawler->filter('.pagination .page a')->last()->text();
-                
-                // Infos des enregistrements
-                $listings = $crawler->filter('.local-listing')->each(function(Crawler $node, $i) use ($output) 
+                $lastPage = 1;
+                for($page = 1; $page <= $lastPage; $page++)
                 {
-                    $listing['name'] = utf8_decode(trim($node->filter('h2 a')->text()));
-                    $listing['number'] = utf8_decode(trim($node->filter('.number')->text()));
-					
-					try
-					{
-						$url = new \GuzzleHttp\Url('http', trim($node->filter('.url')->text()));
-						$listing['url'] = $url;
-					}
-					catch(\Exception $e)
-					{
-						$listing['url'] = '';
-					}
+                    // Title
+                    $titles = array(
+                        utf8_decode($what),
+                        utf8_decode(sprintf('%s (%s/%s)', $canton,  array_search($canton, array_keys($cantons)) + 1, count($cantons))),
+                        utf8_decode(sprintf('%s (%s/%s)', $commune, $i + 1, count($communes))),
+                        sprintf('page %s/%s', $page, $lastPage)
+                    );
+                    $this->output->writeln($this->formatter->formatBlock($titles, 'question', true));
 
-                    return $listing;
-                });
-                
-                // Affichage table
-                $table = new Table($output);
-                $table->setHeaders(array('Nom', 'Tel', 'Url'));
-                $table->addRows($listings);
-                $table->render();
-				
-				foreach($listings as $listing)
-				{
-					if(empty($listing['url']))
-					{
-						continue;
-					}
-					
-					$this->output->writeln($this->formatter->formatBlock(sprintf('%s (%s)', $listing['name'], $listing['url']), 'question'));
-					
-					try
-					{
-						$response = $this->client->get($listing['url']);
-					}
-					catch(\Exception $e)
-					{
-						$this->output->writeln(sprintf('<error>%s</error>', $e->getMessage()));
-						$this->logger->warning(sprintf('%s - %s', $listing['url'], $e->getMessage()));
-						continue;
-					}
-					
-					$html = (string) $response->getBody();
-					$crawler = new Crawler($html);
-					
-					$stylesheets = $crawler->filterXPath("//link[@rel='stylesheet']/@href");
-					$styles = $crawler->filterXPath("//style");
-					
-					$this->output->writeln(sprintf('<comment>%s</comment> stylesheet(s) + <comment>%s</comment> style tag(s) founded', count($stylesheets), $styles->count()));
+                    // Requête de base
+                    $request = $this->client->createRequest('GET', 'http://tel.local.ch');
+                    $request->setPath('fr/q');
 
-					$countTag = $styles->each(function(Crawler $style){
-						return $this->analyzeStyleTag($style);
-					}); 
-					
-					$countSheet = $stylesheets->each(function(Crawler $stylesheet) use ($listing) {
-						return $this->analyzeStylesheet($stylesheet, $listing);
-					});
-					
-					// Total
-					$count = array_sum(array_merge($countTag, $countSheet));
-					$tag = $count == 0 ? 'comment' : 'info';
-					$this->output->writeln(sprintf('TOTAL : <%s>%s @media founded</%s>', $tag, $count, $tag));
-				}
+                    // Query string
+                    $query = $request->getQuery();
+                    $query->add('what', $what);
+                    $query->add('where', $commune);
+                    $query->add('page', $page);
+
+                    // Réponse
+                    $response = $this->client->send($request);
+                    $html = (string) $response->getBody();
+                    $crawler = new Crawler($html);
+
+                    // Dernière page
+                    try {
+                        $lastPage = (int) $crawler->filter('.pagination .page a')->last()->text();
+                    } catch (Exception $e) {
+                        $lastPage = 1;
+                    }
+
+                    // Infos des enregistrements
+                    $listings = $crawler->filter('.local-listing')->each(function(Crawler $node, $i) use ($output)
+                    {
+                        $listing['name'] = utf8_decode(trim($node->filter('h2 a')->text()));
+                        $listing['number'] = utf8_decode(trim($node->filter('.number')->text()));
+
+                        try
+                        {
+                            $url = new Url('http', trim($node->filter('.url')->text()));
+                            $listing['url'] = $url;
+                        }
+                        catch(Exception $e)
+                        {
+                            $listing['url'] = '';
+                        }
+
+                        return $listing;
+                    });
+
+                    // Affichage table
+                    $table = new Table($output);
+                    $table->setHeaders(array('Nom', 'Tel', 'Url'));
+                    $table->addRows($listings);
+                    $table->render();
+
+                    foreach($listings as $listing)
+                    {
+                        if(empty($listing['url']))
+                        {
+                            continue;
+                        }
+
+                        $this->output->writeln($this->formatter->formatBlock(sprintf('%s (%s)', $listing['name'], $listing['url']), 'question'));
+
+                        try
+                        {
+                            $response = $this->client->get($listing['url']);
+                        }
+                        catch(Exception $e)
+                        {
+                            $this->output->writeln(sprintf('<error>%s</error>', $e->getMessage()));
+                            $this->logger->warning(sprintf('%s - %s', $listing['url'], $e->getMessage()));
+                            continue;
+                        }
+
+                        $html = (string) $response->getBody();
+                        $crawler = new Crawler($html);
+
+                        $stylesheets = $crawler->filterXPath("//link[@rel='stylesheet']/@href");
+                        $styles = $crawler->filterXPath("//style");
+
+                        $this->output->writeln(sprintf('<comment>%s</comment> stylesheet(s) + <comment>%s</comment> style tag(s) founded', count($stylesheets), $styles->count()));
+
+                        $countTag = $styles->each(function(Crawler $style){
+                            return $this->analyzeStyleTag($style);
+                        });
+
+                        $countSheet = $stylesheets->each(function(Crawler $stylesheet) use ($listing) {
+                            return $this->analyzeStylesheet($stylesheet, $listing);
+                        });
+
+                        // Total
+                        $count = array_sum(array_merge($countTag, $countSheet));
+                        $tag = $count == 0 ? 'comment' : 'info';
+                        $this->output->writeln(sprintf('TOTAL : <%s>%s @media founded</%s>', $tag, $count, $tag));
+                    }
+                }
             }
         }
     }
@@ -164,7 +182,7 @@ class LocalCommand extends \Symfony\Bundle\FrameworkBundle\Command\ContainerAwar
 	{
 		// URL
 		$href = $stylesheet->text();
-		$temp = \GuzzleHttp\Url::fromString($href);
+		$temp = Url::fromString($href);
 		
 		$host = $temp->getHost();
 		if(empty($host))
@@ -175,7 +193,7 @@ class LocalCommand extends \Symfony\Bundle\FrameworkBundle\Command\ContainerAwar
 		}
 		else
 		{
-			$url = \GuzzleHttp\Url::fromString($href); 
+			$url = Url::fromString($href);
 		}
 		
 		$scheme = $url->getScheme();
@@ -192,7 +210,7 @@ class LocalCommand extends \Symfony\Bundle\FrameworkBundle\Command\ContainerAwar
 		{
 			$response = $this->client->get($url);
 		}
-		catch(\Exception $e)
+		catch(Exception $e)
 		{
 			$this->output->writeln(sprintf(' <error>%s</error>', $e->getMessage()));
 			$this->logger->warning(sprintf('%s - %s', $url, $e->getMessage()));
