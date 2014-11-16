@@ -54,47 +54,44 @@ class LocalCommand extends ContainerAwareCommand
         $this->input = $input;
         $this->output = $output;
         $this->logger = $this->getContainer()->get('monolog.logger.webot.local');
-
         $searchs = Yaml::parse(file_get_contents(__DIR__.'/../Resources/config/data.yml'));
-        $what = 'Café, Restaurant';
         $cantons = $searchs['cantons'];
+        $what = $searchs['what'];
 
         foreach ($cantons as $canton => $communes) {
             foreach ($communes as $i => $commune) {
                 $lastPage = 1;
                 for ($page = 1; $page <= $lastPage; $page++) {
-                    // Title
+                    // Write title
                     $titles = array(
                         utf8_decode($what),
-                        utf8_decode(sprintf('%s (%s/%s)', $canton,  array_search($canton, array_keys($cantons)) + 1, count($cantons))),
+                        utf8_decode(sprintf('%s (%s/%s)', $canton, array_search($canton, array_keys($cantons)) + 1, count($cantons))),
                         utf8_decode(sprintf('%s (%s/%s)', $commune, $i + 1, count($communes))),
                         sprintf('page %s/%s', $page, $lastPage),
                     );
                     $this->output->writeln($this->formatter->formatBlock($titles, 'question', true));
 
-                    // Requête de base
+                    // Create request
                     $request = $this->client->createRequest('GET', 'http://tel.local.ch');
                     $request->setPath('fr/q');
-
-                    // Query string
                     $query = $request->getQuery();
                     $query->add('what', $what);
                     $query->add('where', $commune);
                     $query->add('page', $page);
 
-                    // Réponse
+                    // Get response
                     $response = $this->client->send($request);
                     $html = (string) $response->getBody();
                     $crawler = new Crawler($html);
 
-                    // Dernière page
+                    // Set the last page
                     try {
                         $lastPage = (int) $crawler->filter('.pagination .page a')->last()->text();
                     } catch (Exception $e) {
                         $lastPage = 1;
                     }
 
-                    // Infos des enregistrements
+                    // Filter informations
                     $listings = $crawler->filter('.local-listing')->each(function (Crawler $node) {
                         $listing['name'] = utf8_decode(trim($node->filter('h2 a')->text()));
                         $listing['number'] = utf8_decode(trim($node->filter('.number')->text()));
@@ -109,7 +106,7 @@ class LocalCommand extends ContainerAwareCommand
                         return $listing;
                     });
 
-                    // Affichage table
+                    // Render table of listings
                     $table = new Table($output);
                     $table->setHeaders(array('Nom', 'Tel', 'Url'));
                     $table->addRows($listings);
@@ -120,8 +117,11 @@ class LocalCommand extends ContainerAwareCommand
                             continue;
                         }
 
-                        $this->output->writeln($this->formatter->formatBlock(sprintf('%s (%s)', $listing['name'], $listing['url']), 'question'));
+                        // Write subtitle
+                        $subtitle = sprintf('%s (%s)', $listing['name'], $listing['url']);
+                        $this->output->writeln($this->formatter->formatBlock($subtitle, 'question'));
 
+                        // Get response
                         try {
                             $response = $this->client->get($listing['url']);
                         } catch (Exception $e) {
@@ -130,26 +130,33 @@ class LocalCommand extends ContainerAwareCommand
                             continue;
                         }
 
+                        // Filter stylesheets
                         $html = (string) $response->getBody();
                         $crawler = new Crawler($html);
-
                         $stylesheets = $crawler->filterXPath("//link[@rel='stylesheet']/@href");
                         $styles = $crawler->filterXPath("//style");
 
-                        $this->output->writeln(sprintf('<comment>%s</comment> stylesheet(s) + <comment>%s</comment> style tag(s) founded', count($stylesheets), $styles->count()));
+                        // Write message
+                        $message = sprintf(
+                            '<comment>%s</comment> stylesheet(s) + <comment>%s</comment> style tag(s) founded',
+                            $stylesheets->count(),
+                            $styles->count()
+                        );
+                        $this->output->writeln($message);
 
+                        // Analyze
                         $countTag = $styles->each(function (Crawler $style) {
                             return $this->analyzeStyleTag($style);
                         });
-
                         $countSheet = $stylesheets->each(function (Crawler $stylesheet) use ($listing) {
                             return $this->analyzeStylesheet($stylesheet, $listing);
                         });
 
-                        // Total
+                        // Write total
                         $count = array_sum(array_merge($countTag, $countSheet));
                         $tag = $count == 0 ? 'comment' : 'info';
-                        $this->output->writeln(sprintf('TOTAL : <%s>%s @media founded</%s>', $tag, $count, $tag));
+                        $message = sprintf('TOTAL : <%s>%s @media founded</%s>', $tag, $count, $tag);
+                        $this->output->writeln($message);
                     }
                 }
             }
@@ -158,10 +165,11 @@ class LocalCommand extends ContainerAwareCommand
 
     protected function analyzeStylesheet(Crawler $stylesheet, $listing)
     {
-        // URL
+        // Get href attribute
         $href = $stylesheet->text();
         $temp = Url::fromString($href);
 
+        // Set host
         $host = $temp->getHost();
         if (empty($host)) {
             $url = clone $listing['url'];
@@ -171,15 +179,19 @@ class LocalCommand extends ContainerAwareCommand
             $url = Url::fromString($href);
         }
 
+        // Set scheme
         $scheme = $url->getScheme();
         if (empty($scheme)) {
             $url->setScheme('http');
         }
 
+        // Remove dot segments
         $url->removeDotSegments();
 
+        // Write URL
         $this->output->write((string) $url);
 
+        // Get response
         try {
             $response = $this->client->get($url);
         } catch (Exception $e) {
@@ -189,12 +201,14 @@ class LocalCommand extends ContainerAwareCommand
             return 0;
         }
 
-        if (is_null($response->getBody())) {
+        // Check body's response
+        if ($response->getBody() === null) {
             $this->output->writeln(' <error>empty body</error>');
 
             return 0;
         }
 
+        // Count media tag
         $css = (string) $response->getBody();
         $count = $this->countMediaTag($css);
 
@@ -206,7 +220,8 @@ class LocalCommand extends ContainerAwareCommand
         //$countImport = substr_count($css, '@import');
         $count = substr_count($css, '@media');
         $tag = $count == 0 ? 'comment' : 'info';
-        $this->output->writeln(sprintf(' <%s>%s @media founded</%s>', $tag, $count, $tag));
+        $message = sprintf(' <%s>%s @media founded</%s>', $tag, $count, $tag);
+        $this->output->writeln($message);
 
         return $count;
     }
